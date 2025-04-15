@@ -184,22 +184,22 @@ class TradingSimulator:
             self.market_navs[self.step] = start_market_nav * (1 + self.market_returns[self.step])
 
         info = {'reward': reward,
-                'nav'   : self.navs[self.step],
-                'costs' : self.costs[self.step]}
+                'nav': self.navs[self.step],
+                'costs': self.costs[self.step]}
 
         self.step += 1
         return reward, info
 
     def result(self):
         """returns current state as pd.DataFrame """
-        return pd.DataFrame({'action'         : self.actions,  # current action
-                             'nav'            : self.navs,  # starting Net Asset Value (NAV)
-                             'market_nav'     : self.market_navs,
-                             'market_return'  : self.market_returns,
+        return pd.DataFrame({'action': self.actions,  # current action
+                             'nav': self.navs,  # starting Net Asset Value (NAV)
+                             'market_nav': self.market_navs,
+                             'market_return': self.market_returns,
                              'strategy_return': self.strategy_returns,
-                             'position'       : self.positions,  # eod position
-                             'cost'           : self.costs,  # eod costs
-                             'trade'          : self.trades})  # eod trade)
+                             'position': self.positions,  # eod position
+                             'cost': self.costs,  # eod costs
+                             'trade': self.trades})  # eod trade)
 
 
 class TradingEnvironment(gym.Env):
@@ -239,8 +239,12 @@ class TradingEnvironment(gym.Env):
                                           trading_cost_bps=self.trading_cost_bps,
                                           time_cost_bps=self.time_cost_bps)
         self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(self.data_source.min_values,
-                                            self.data_source.max_values)
+        # Convert pandas Series to numpy arrays
+        self.observation_space = spaces.Box(
+            low=np.array(self.data_source.min_values),
+            high=np.array(self.data_source.max_values),
+            dtype=np.float32
+        )
         self.reset()
 
     def seed(self, seed=None):
@@ -248,12 +252,15 @@ class TradingEnvironment(gym.Env):
         return [seed]
 
     def step(self, action):
-        """Returns state observation, reward, done and info"""
+        """Returns state observation, reward, terminated, truncated and info"""
         assert self.action_space.contains(action), '{} {} invalid'.format(action, type(action))
         observation, done = self.data_source.take_step()
         reward, info = self.simulator.take_step(action=action,
                                                 market_return=observation[0])
-        return observation, reward, done, info
+        # In new Gym API, done is split into terminated and truncated
+        terminated = done
+        truncated = False  # We don't have truncation in our environment
+        return observation, reward, terminated, truncated, info
 
     def reset(self):
         """Resets DataSource and TradingSimulator; returns first observation"""
